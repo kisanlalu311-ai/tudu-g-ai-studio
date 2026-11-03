@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>पाँच दोस्त – 3D गाँव गेम</title>
+<style>
+  *{box-sizing:border-box} html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#9bd5ef;font-family:system-ui,sans-serif;touch-action:none}
+  #game{position:fixed;inset:0}
+  #hud{position:fixed;top:10px;left:10px;right:10px;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none;gap:8px}
+  .panel{background:#10251dcc;color:white;padding:9px 12px;border-radius:14px;font-size:13px;box-shadow:0 3px 12px #0003}
+  #name{font-weight:800;font-size:15px} #hint{opacity:.9;margin-top:3px}
+  #switches{position:fixed;top:76px;right:10px;display:grid;grid-template-columns:repeat(2,auto);gap:6px}
+  button{border:0;border-radius:12px;background:#fff;color:#173323;font-weight:800;padding:10px 12px;box-shadow:0 3px 10px #0003;font-size:13px}
+  button.active{background:#ffcf45;outline:3px solid #fff}
+  #controls{position:fixed;bottom:16px;left:16px;right:16px;display:flex;justify-content:space-between;align-items:end;pointer-events:none}
+  #joy{width:138px;height:138px;border-radius:50%;background:#16352b66;border:2px solid #ffffffaa;position:relative;pointer-events:auto;touch-action:none}
+  #stick{position:absolute;width:58px;height:58px;border-radius:50%;background:#fffD;border:3px solid #315c43;left:38px;top:38px;box-shadow:0 3px 8px #0004}
+  #actions{display:flex;gap:10px;align-items:end;pointer-events:auto}
+  #actions button{width:76px;height:76px;border-radius:50%;background:#ffcf45;font-size:14px}
+  #actions button#run{background:#fff}
+  #toast{position:fixed;bottom:166px;left:50%;transform:translateX(-50%);background:#10251ddd;color:white;padding:8px 13px;border-radius:20px;font-size:12px;pointer-events:none;white-space:nowrap}
+  @media(max-width:380px){#joy{width:120px;height:120px}#stick{left:31px;top:31px}#actions button{width:66px;height:66px}}
+</style>
+</head>
+<body>
+<div id="game"></div>
+<div id="hud">
+  <div class="panel"><div id="name">खिलाड़ी 1</div><div id="hint">Joystick से चलाएँ • ऊपर से कैमरा</div></div>
+  <div class="panel">🌳 गाँव में आपका स्वागत है</div>
+</div>
+<div id="switches">
+  <button class="active" data-i="0">1 दोस्त</button><button data-i="1">2 दोस्त</button>
+  <button data-i="2">3 दोस्त</button><button data-i="3">4 दोस्त</button>
+  <button data-i="4">5 दोस्त</button>
+</div>
+<div id="toast">पीले बटन से किरदार बदलें</div>
+<div id="controls">
+  <div id="joy"><div id="stick"></div></div>
+  <div id="actions"><button id="run">दौड़ो</button><button id="next">बदलो ↻</button></div>
+</div>
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x9bd5ef);
+scene.fog = new THREE.Fog(0x9bd5ef, 38, 95);
+const camera = new THREE.OrthographicCamera(-17,17,17,-17,0.1,150);
+camera.position.set(0,42,0.01); camera.lookAt(0,0,0);
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2)); renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+document.getElementById('game').appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xffffff,0x63834b,2.0));
+const sun=new THREE.DirectionalLight(0xffffff,2.0); sun.position.set(-15,30,12); sun.castShadow=true; sun.shadow.mapSize.set(2048,2048); scene.add(sun);
+
+const mat=(c)=>new THREE.MeshStandardMaterial({color:c,roughness:.9});
+const grass=mat(0x72b85a), road=mat(0xb9a17b), path=mat(0xd8c49a);
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(120,120),grass); ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; scene.add(ground);
+function box(w,h,d,m,x,y,z){const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);o.position.set(x,y,z);o.castShadow=true;o.receiveShadow=true;scene.add(o);return o}
+function tree(x,z,s=1){
+  const trunk= new THREE.Mesh(new THREE.CylinderGeometry(.18*s,.25*s,1.5*s,7),mat(0x80502d)); trunk.position.set(x,.75*s,z); trunk.castShadow=true;scene.add(trunk);
+  const crown=new THREE.Mesh(new THREE.SphereGeometry(.95*s,10,8),mat(0x287c38)); crown.position.set(x,1.85*s,z); crown.castShadow=true;scene.add(crown);
+  const crown2=new THREE.Mesh(new THREE.SphereGeometry(.68*s,10,8),mat(0x3c9843)); crown2.position.set(x+.42*s,2.05*s,z-.12*s);scene.add(crown2);
+}
+function house(x,z,color){
+  box(5,2.8,4,mat(color),x,1.4,z);
+  const roof=new THREE.Mesh(new THREE.ConeGeometry(3.8,2.2,4),mat(0x9b4930)); roof.rotation.y=Math.PI/4; roof.position.set(x,3.9,z); roof.castShadow=true;scene.add(roof);
+  box(.95,1.7,.12,mat(0x58351f),x,0.85,z+2.06);
+  box(.85,.85,.14,mat(0x8bd7ed),x-1.45,1.75,z+2.08);
+  box(.85,.85,.14,mat(0x8bd7ed),x+1.45,1.75,z+2.08);
+}
+// Village roads
+box(120,.08,8,road,0,.02,0);
+box(8,.09,120,road,0,.03,0);
+box(120,.1,1.1,path,0,.08,5.2);
+// Houses and surroundings
+house(-13,-10,0xe8c58c); house(13,-11,0xd9a66d); house(-14,12,0xe2d0a0); house(14,12,0xc9a17a);
+for(const [x,z,s] of [[-23,-20,1.3],[-21,0,1],[-22,20,1.2],[22,-21,1.2],[22,0,1],[22,21,1.3],[-7,-23,.9],[8,-23,1],[7,23,1],[-8,23,1]]) tree(x,z,s);
+// well
+const well=new THREE.Mesh(new THREE.CylinderGeometry(1.15,1.25,.8,12),mat(0x888b87));well.position.set(8,0.4,8);well.castShadow=true;scene.add(well);
+const water=new THREE.Mesh(new THREE.CircleGeometry(.88,16),mat(0x4aa8d1));water.rotation.x=-Math.PI/2;water.position.set(8,.82,8);scene.add(water);
+
+// Character models, facing toward top of screen initially
+const colors=[0xe64b3c,0x3979dc,0xf0b52e,0x28a36a,0x9857c8];
+const people=[];
+function person(i,x,z){
+  const g=new THREE.Group(); g.position.set(x,0,z); scene.add(g);
+  const shirt=mat(colors[i]), skin=mat(0xc98d62), pants=mat(0x293b55), hair=mat(0x29221e), shoes=mat(0x30251e);
+  const torso=new THREE.Mesh(new THREE.CylinderGeometry(.48,.55,1.15,10),shirt); torso.position.y=1.35; torso.castShadow=true;g.add(torso);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(.38,12,10),skin);head.position.y=2.18;head.castShadow=true;g.add(head);
+  const cap=new THREE.Mesh(new THREE.SphereGeometry(.39,12,6,0,Math.PI*2,0,Math.PI/2),hair);cap.position.y=2.34;g.add(cap);
+  for(const sx of [-.22,.22]){
+    const leg=new THREE.Mesh(new THREE.CylinderGeometry(.14,.16,.7,8),pants);leg.position.set(sx,.48,0);leg.castShadow=true;g.add(leg);
+    const foot=new THREE.Mesh(new THREE.BoxGeometry(.25,.16,.38),shoes);foot.position.set(sx,.12,.08);g.add(foot);
+    const arm=new THREE.Mesh(new THREE.CylinderGeometry(.12,.14,.75,8),skin);arm.position.set(sx*2,1.42,0);arm.rotation.z=sx<0?-.18:.18;g.add(arm);
+  }
+  // small selection ring
+  const ring=new THREE.Mesh(new THREE.RingGeometry(.72,.88,32),new THREE.MeshBasicMaterial({color:0xffdf42,side:THREE.DoubleSide}));
+  ring.rotation.x=-Math.PI/2;ring.position.y=.06;g.add(ring);ring.visible=i===0;
+  g.userData.ring=ring;g.userData.legs=g.children.filter(c=>c.geometry?.type==='CylinderGeometry');
+  people.push(g);
+}
+[[-2,-3],[2,-3],[-5,3],[5,3],[0,6]].forEach((p,i)=>person(i,p[0],p[1]));
+let active=0; let joyX=0,joyY=0, running=false;
+const name=document.getElementById('name');
+function select(i){active=(i+5)%5;people.forEach((p,j)=>p.userData.ring.visible=j===active);document.querySelectorAll('[data-i]').forEach(b=>b.classList.toggle('active',+b.dataset.i===active));name.textContent=`खिलाड़ी ${active+1} – ${['लाल','नीला','पीला','हरा','बैंगनी'][active]}`;}
+document.querySelectorAll('[data-i]').forEach(b=>b.addEventListener('click',()=>select(+b.dataset.i)));
+document.getElementById('next').addEventListener('click',()=>select(active+1));
+document.getElementById('run').addEventListener('pointerdown',()=>running=true);
+['pointerup','pointercancel','pointerleave'].forEach(e=>document.getElementById('run').addEventListener(e,()=>running=false));
+const joy=document.getElementById('joy'), stick=document.getElementById('stick'); let pointer=null;
+function joyMove(e){const r=joy.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;let dx=e.clientX-cx,dy=e.clientY-cy;const max=r.width*.32,len=Math.hypot(dx,dy);if(len>max){dx=dx/len*max;dy=dy/len*max;}joyX=dx/max;joyY=dy/max;stick.style.transform=`translate(${dx}px,${dy}px)`;}
+joy.addEventListener('pointerdown',e=>{pointer=e.pointerId;joy.setPointerCapture(pointer);joyMove(e)});
+joy.addEventListener('pointermove',e=>{if(e.pointerId===pointer)joyMove(e)});
+function joyEnd(){pointer=null;joyX=joyY=0;stick.style.transform='translate(0,0)'}
+joy.addEventListener('pointerup',joyEnd);joy.addEventListener('pointercancel',joyEnd);
+window.addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key==='a')joyX=-1;if(e.key==='ArrowRight'||e.key==='d')joyX=1;if(e.key==='ArrowUp'||e.key==='w')joyY=-1;if(e.key==='ArrowDown'||e.key==='s')joyY=1;if(e.key===' ')running=true;if(e.key==='Tab'){e.preventDefault();select(active+1)}});
+window.addEventListener('keyup',e=>{if(['ArrowLeft','ArrowRight','a','d'].includes(e.key))joyX=0;if(['ArrowUp','ArrowDown','w','s'].includes(e.key))joyY=0;if(e.key===' ')running=false});
+const clock=new THREE.Clock();
+function animate(){
+ requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);
+ const p=people[active],v=new THREE.Vector3(joyX,0,joyY);if(v.length()>1)v.normalize();
+ if(v.lengthSq()>.01){const speed=running?8:4.5;p.position.x+=v.x*speed*dt;p.position.z+=v.z*speed*dt;p.position.x=THREE.MathUtils.clamp(p.position.x,-27,27);p.position.z=THREE.MathUtils.clamp(p.position.z,-27,27);p.rotation.y=Math.atan2(v.x,v.z);}
+ people.forEach((q,i)=>{if(i!==active)q.userData.ring.visible=false;});
+ const target=new THREE.Vector3(p.position.x,0,p.position.z);camera.position.x=THREE.MathUtils.lerp(camera.position.x,target.x,.08);camera.position.z=THREE.MathUtils.lerp(camera.position.z,target.z,.08);camera.lookAt(camera.position.x,0,camera.position.z);
+ renderer.render(scene,camera);
+}
+animate();
+addEventListener('resize',()=>{renderer.setSize(innerWidth,innerHeight);const a=innerWidth/innerHeight;camera.left=-17*a/Math.max(1,a);camera.right=17*a/Math.max(1,a);camera.top=17;camera.bottom=-17;camera.updateProjectionMatrix();});
+</script>
+</body>
+</html>
